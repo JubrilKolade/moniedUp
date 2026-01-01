@@ -1,4 +1,3 @@
-// src/controllers/cardController.ts
 import type { Request, Response } from 'express';
 import prisma from '../config/db.js';
 

@@ -1,4 +1,3 @@
-// src/server.ts
 import dotenv from 'dotenv';
 import express from 'express';
 import prisma from './config/db.js';
