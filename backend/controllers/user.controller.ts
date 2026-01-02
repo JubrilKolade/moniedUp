@@ -1,96 +1,87 @@
 import type { Request, Response } from 'express';
-import prisma from '../config/db.js';
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { UserService } from '../services/user.service.js';
+import type { AuthenticatedRequest } from '../middleware/auth.middleware.js';
+import { AppError } from '../middleware/error.middleware.js';
 
-export const registerUser = async (req: Request, res: Response) => {
-    const { name, email, password, phone, address } = req.body;
-
-    if (!name || !email || !password || !phone || !address) {
-        return res.status(400).json({ message: 'Name, email, password, phone, and address are required' });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-        return res.status(400).json({ message: 'Invalid email format' });
-    }
-
-    if (password.length < 6) {
-        return res.status(400).json({ message: 'Password must be at least 6 characters' });
-    }
-
+export const registerUser = async (req: Request, res: Response, next: any) => {
     try {
-        const existingUser = await prisma.user.findUnique({ where: { email } });
-        if (existingUser) {
-            return res.status(400).json({ message: 'User already exists' });
-        }
-
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-        const user = await prisma.user.create({
-            data: { name, email, password: hashedPassword, phone, address },
-        });
-
-        // Return user without password
-        const { password: _, ...userWithoutPassword } = user;
-        res.status(201).json(userWithoutPassword);
+        const { name, email, password, phone, address } = req.body;
+        const user = await UserService.createUser({ name, email, password, phone, address });
+        res.status(201).json({ success: true, data: user });
     } catch (error) {
-        res.status(500).json({ message: (error as Error).message });
+        next(error);
     }
 };
 
-export const loginUser = async (req: Request, res: Response) => {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-        return res.status(400).json({ message: 'Email and password are required' });
-    }
-
+export const loginUser = async (req: Request, res: Response, next: any) => {
     try {
-        const user = await prisma.user.findUnique({ where: { email } });
+        const { email, password } = req.body;
+        const user = await UserService.authenticateUser(email, password);
 
-        if (!user || !(await bcrypt.compare(password, user.password))) {
-            return res.status(401).json({ message: 'Invalid credentials' });
+        if (!process.env.JWT_SECRET) {
+            throw new AppError('Server configuration error', 500);
         }
 
-        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET as string, { expiresIn: '1h' });
-        res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, tier: user.tier } });
+        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '24h' });
+        res.status(200).json({
+            success: true,
+            data: {
+                token,
+                user: {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    tier: user.tier,
+                },
+            },
+        });
     } catch (error) {
-        res.status(500).json({ message: (error as Error).message });
+        next(error);
     }
 };
 
 export const logoutUser = async (req: Request, res: Response) => {
-    // For JWT, logout is client-side (discard token). 
-    // We just return success here.
-    res.status(200).json({ message: 'Logout successful' });
+    // For JWT, logout is client-side (discard token)
+    res.status(200).json({ success: true, message: 'Logout successful' });
 };
 
-export const updateUser = async (req: Request, res: Response) => {
-    const { userId } = req.params;
-    const { name, phone, address } = req.body;
-
+export const updateUser = async (req: Request, res: Response, next: any) => {
     try {
-        const user = await prisma.user.update({
-            where: { id: userId },
-            data: { name, phone, address },
-        });
-        const { password: _, ...userWithoutPassword } = user;
-        res.status(200).json(userWithoutPassword);
+        const { userId } = req.params;
+        if (!userId) {
+            return res.status(400).json({ success: false, message: 'User ID is required' });
+        }
+        const { name, phone, address } = req.body;
+        const user = await UserService.updateUser(userId, { name, phone, address });
+        res.status(200).json({ success: true, data: user });
     } catch (error) {
-        res.status(400).json({ message: 'Failed to update user' });
+        next(error);
     }
 };
 
-export const deleteUser = async (req: Request, res: Response) => {
-    const { userId } = req.params;
-
+export const deleteUser = async (req: Request, res: Response, next: any) => {
     try {
-        // Cascade delete is handled by database if configured, or Prisma relation actions.
-        // Assuming simple delete for now.
-        await prisma.user.delete({ where: { id: userId } });
-        res.status(200).json({ message: 'User deleted successfully' });
+        const { userId } = req.params;
+        if (!userId) {
+            return res.status(400).json({ success: false, message: 'User ID is required' });
+        }
+        await UserService.deleteUser(userId);
+        res.status(200).json({ success: true, message: 'User deleted successfully' });
     } catch (error) {
-        res.status(400).json({ message: 'Failed to delete user' });
+        next(error);
+    }
+};
+
+export const getUserProfile = async (req: Request, res: Response, next: any) => {
+    try {
+        const authReq = req as AuthenticatedRequest;
+        if (!authReq.userId) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+        const user = await UserService.getUserById(authReq.userId);
+        res.status(200).json({ success: true, data: user });
+    } catch (error) {
+        next(error);
     }
 };

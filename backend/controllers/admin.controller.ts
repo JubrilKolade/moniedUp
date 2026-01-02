@@ -1,11 +1,11 @@
 import type { Request, Response } from 'express';
-import prisma from '../config/db.js';
+import { UserService } from '../services/user.service.js';
 
-export const getAllUsers = async (req: Request, res: Response) => {
+export const getAllUsers = async (req: Request, res: Response, next: any) => {
     try {
-        const users = await prisma.user.findMany(); // Prisma query
-        res.status(200).json(users);
+        const users = await UserService.getAllUsers();
+        res.status(200).json({ success: true, data: users });
     } catch (error) {
-        res.status(500).json({ message: (error as Error).message });
+        next(error);
     }
 };
