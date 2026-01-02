@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Pool } from "pg";
+import { Sequelize } from "sequelize";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -7,16 +7,28 @@ if (!connectionString) {
     throw new Error("DATABASE_URL environment variable is not set. Please check your .env file.");
 }
 
-const pool = new Pool({
-    connectionString,
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+// Create Sequelize instance
+// This is similar to mongoose.connect() in MongoDB
+const sequelize = new Sequelize(connectionString, {
+    dialect: 'postgres',
+    logging: process.env.NODE_ENV === 'development' ? console.log : false,
+    pool: {
+        max: 5,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
+    }
 });
 
-pool.on('error', (err) => {
-    console.error('Unexpected error on idle client', err);
-    process.exit(-1);
-});
+// Test the connection
+export const connectDB = async () => {
+    try {
+        await sequelize.authenticate();
+        console.log('✅ Database connection established successfully.');
+    } catch (error) {
+        console.error('❌ Unable to connect to the database:', error);
+        throw error;
+    }
+};
 
-export default pool;
+export default sequelize;

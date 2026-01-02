@@ -1,4 +1,4 @@
-import pool from '../config/db.js';
+import { User } from '../models/index.js';
 import { AppError } from '../middleware/error.middleware.js';
 
 export class UserService {
@@ -9,122 +9,81 @@ export class UserService {
         phone: string;
         address: string;
     }) {
-        const client = await pool.connect();
-        try {
-            // Check if user exists
-            const existing = await client.query('SELECT id FROM users WHERE email = $1', [data.email]);
-            if (existing.rows.length > 0) {
-                throw new AppError('User already exists', 409);
-            }
-
-            // Create user
-            const result = await client.query(
-                `INSERT INTO users (name, email, password, phone, address, tier, "kycStatus")
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                 RETURNING id, name, email, phone, address, tier, "kycStatus", "createdAt", "updatedAt"`,
-                [data.name, data.email, data.password, data.phone, data.address, 'Tier1', 'unverified']
-            );
-
-            return result.rows[0];
-        } finally {
-            client.release();
+        // Check if user exists (similar to User.findOne in Mongoose)
+        const existingUser = await User.findOne({ where: { email: data.email } });
+        if (existingUser) {
+            throw new AppError('User already exists', 409);
         }
+
+        // Create user (similar to new User().save() in Mongoose)
+        const user = await User.create({
+            name: data.name,
+            email: data.email,
+            password: data.password,
+            phone: data.phone,
+            address: data.address,
+        });
+
+        // Return user without password (convert to plain object)
+        const userData = user.toJSON();
+        const { password: _, ...userWithoutPassword } = userData;
+        return userWithoutPassword;
     }
 
     static async authenticateUser(email: string, password: string) {
-        const client = await pool.connect();
-        try {
-            const result = await client.query(
-                'SELECT id, name, email, password, tier, "kycStatus" FROM users WHERE email = $1',
-                [email]
-            );
+        // Find user by email
+        const user = await User.findOne({ where: { email } });
 
-            if (result.rows.length === 0) {
-                throw new AppError('Invalid credentials', 401);
-            }
-
-            return result.rows[0];
-        } finally {
-            client.release();
+        if (!user) {
+            throw new AppError('Invalid credentials', 401);
         }
+
+        // Return user data (password will be checked in controller with bcrypt)
+        return user.toJSON();
     }
 
     static async getUserById(userId: string) {
-        const client = await pool.connect();
-        try {
-            const result = await client.query(
-                `SELECT id, name, email, phone, address, tier, "kycStatus", "createdAt", "updatedAt"
-                 FROM users WHERE id = $1`,
-                [userId]
-            );
+        const user = await User.findByPk(userId, {
+            attributes: { exclude: ['password'] }, // Exclude password from result
+        });
 
-            if (result.rows.length === 0) {
-                throw new AppError('User not found', 404);
-            }
-
-            return result.rows[0];
-        } finally {
-            client.release();
+        if (!user) {
+            throw new AppError('User not found', 404);
         }
+
+        return user.toJSON();
     }
 
     static async updateUser(userId: string, data: { name?: string; phone?: string; address?: string }) {
-        const client = await pool.connect();
-        try {
-            const updates: string[] = [];
-            const values: any[] = [];
-            let paramCount = 1;
+        const user = await User.findByPk(userId);
 
-            if (data.name !== undefined) {
-                updates.push(`name = $${paramCount++}`);
-                values.push(data.name);
-            }
-            if (data.phone !== undefined) {
-                updates.push(`phone = $${paramCount++}`);
-                values.push(data.phone);
-            }
-            if (data.address !== undefined) {
-                updates.push(`address = $${paramCount++}`);
-                values.push(data.address);
-            }
-
-            if (updates.length === 0) {
-                return await this.getUserById(userId);
-            }
-
-            values.push(userId);
-            const result = await client.query(
-                `UPDATE users SET ${updates.join(', ')}, "updatedAt" = NOW()
-                 WHERE id = $${paramCount}
-                 RETURNING id, name, email, phone, address, tier, "kycStatus", "createdAt", "updatedAt"`,
-                values
-            );
-
-            return result.rows[0];
-        } finally {
-            client.release();
+        if (!user) {
+            throw new AppError('User not found', 404);
         }
+
+        // Update user (similar to user.save() in Mongoose)
+        await user.update(data);
+
+        // Return updated user without password
+        const userData = user.toJSON();
+        const { password: _, ...userWithoutPassword } = userData;
+        return userWithoutPassword;
     }
 
     static async deleteUser(userId: string) {
-        const client = await pool.connect();
-        try {
-            await client.query('DELETE FROM users WHERE id = $1', [userId]);
-        } finally {
-            client.release();
+        const user = await User.findByPk(userId);
+        if (!user) {
+            throw new AppError('User not found', 404);
         }
+        await user.destroy(); // Similar to user.remove() in Mongoose
     }
 
     static async getAllUsers() {
-        const client = await pool.connect();
-        try {
-            const result = await client.query(
-                `SELECT id, name, email, phone, address, tier, "kycStatus", "createdAt", "updatedAt"
-                 FROM users`
-            );
-            return result.rows;
-        } finally {
-            client.release();
-        }
+        // Find all users (similar to User.find() in Mongoose)
+        const users = await User.findAll({
+            attributes: { exclude: ['password'] },
+        });
+
+        return users.map(user => user.toJSON());
     }
 }

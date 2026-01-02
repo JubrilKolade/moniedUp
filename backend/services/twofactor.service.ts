@@ -1,6 +1,6 @@
 import QRCode from 'qrcode';
 import speakeasy from 'speakeasy';
-import pool from '../config/db.js';
+import { User } from '../models/index.js';
 import { AppError } from '../middleware/error.middleware.js';
 
 export class TwoFactorService {
@@ -14,15 +14,13 @@ export class TwoFactorService {
             throw new AppError('Failed to generate secret', 500);
         }
 
-        const client = await pool.connect();
-        try {
-            await client.query(
-                'UPDATE users SET "twoFactorSecret" = $1 WHERE id = $2',
-                [secret.base32, userId]
-            );
-        } finally {
-            client.release();
+        // Update user (similar to user.save() in Mongoose)
+        const user = await User.findByPk(userId);
+        if (!user) {
+            throw new AppError('User not found', 404);
         }
+
+        await user.update({ twoFactorSecret: secret.base32 });
 
         if (!secret.otpauth_url) {
             throw new AppError('Failed to generate OTP URL', 500);
@@ -37,27 +35,19 @@ export class TwoFactorService {
     }
 
     static async validateToken(userId: string, token: string): Promise<boolean> {
-        const client = await pool.connect();
-        try {
-            const result = await client.query(
-                'SELECT "twoFactorSecret" FROM users WHERE id = $1',
-                [userId]
-            );
+        const user = await User.findByPk(userId);
 
-            if (result.rows.length === 0 || !result.rows[0].twoFactorSecret) {
-                throw new AppError('2FA not set up or user not found', 400);
-            }
-
-            const verified = speakeasy.totp.verify({
-                secret: result.rows[0].twoFactorSecret,
-                encoding: 'base32',
-                token,
-                window: 2,
-            });
-
-            return verified;
-        } finally {
-            client.release();
+        if (!user || !user.twoFactorSecret) {
+            throw new AppError('2FA not set up or user not found', 400);
         }
+
+        const verified = speakeasy.totp.verify({
+            secret: user.twoFactorSecret,
+            encoding: 'base32',
+            token,
+            window: 2,
+        });
+
+        return verified;
     }
 }

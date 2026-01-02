@@ -1,4 +1,4 @@
-import pool from '../config/db.js';
+import { Card, Account, User } from '../models/index.js';
 import { AppError } from '../middleware/error.middleware.js';
 
 export class CardService {
@@ -15,94 +15,98 @@ export class CardService {
     }
 
     static async checkUserCardLimit(userId: string): Promise<boolean> {
-        const client = await pool.connect();
-        try {
-            const result = await client.query(
-                `SELECT COUNT(*) as count FROM cards c
-                 JOIN accounts a ON c."accountId" = a.id
-                 WHERE a."userId" = $1`,
-                [userId]
-            );
-            return parseInt(result.rows[0].count) > 0;
-        } finally {
-            client.release();
+        // Count cards for user's accounts (using include/join)
+        const user = await User.findByPk(userId, {
+            include: [{
+                model: Account,
+                as: 'accounts',
+                include: [{
+                    model: Card,
+                    as: 'cards',
+                }],
+            }],
+        });
+
+        if (!user) {
+            throw new AppError('User not found', 404);
         }
+
+        const userData = user.toJSON() as any;
+        // Check if user has any card in any of their accounts
+        const userHasCard = userData.accounts.some((account: any) => account.cards.length > 0);
+        return userHasCard;
     }
 
     static async createCard(accountId: string, type: 'Visa' | 'Mastercard') {
-        const client = await pool.connect();
-        try {
-            // Get account with user info
-            const accountResult = await client.query(
-                `SELECT a.*, a."userId" FROM accounts a WHERE a.id = $1`,
-                [accountId]
-            );
+        // Get account with user info
+        const account = await Account.findByPk(accountId, {
+            include: [{
+                model: User,
+                as: 'user',
+            }],
+        });
 
-            if (accountResult.rows.length === 0) {
-                throw new AppError('Account not found', 404);
-            }
-
-            const account = accountResult.rows[0];
-
-            // Check if user already has a card
-            const userHasCard = await this.checkUserCardLimit(account.userId);
-            if (userHasCard) {
-                throw new AppError('User already owns a card. Limit is one card per user.', 400);
-            }
-
-            // Generate unique card number
-            let cardNumber: string;
-            let isUnique = false;
-            let attempts = 0;
-            const maxAttempts = 10;
-
-            while (!isUnique && attempts < maxAttempts) {
-                cardNumber = this.generateCardNumber();
-                const existing = await client.query('SELECT id FROM cards WHERE "cardNumber" = $1', [cardNumber]);
-                if (existing.rows.length === 0) {
-                    isUnique = true;
-                    break;
-                }
-                attempts++;
-            }
-
-            if (!isUnique) {
-                throw new AppError('Failed to generate unique card number', 500);
-            }
-
-            const cvv = this.generateCVV();
-            const expiryDate = new Date();
-            expiryDate.setFullYear(expiryDate.getFullYear() + 3);
-
-            const result = await client.query(
-                `INSERT INTO cards ("accountId", type, "cardNumber", cvv, "expiryDate", status, "issuedAt")
-                 VALUES ($1, $2, $3, $4, $5, $6, NOW())
-                 RETURNING *`,
-                [accountId, type, cardNumber!, cvv, expiryDate, 'active']
-            );
-
-            return result.rows[0];
-        } finally {
-            client.release();
+        if (!account) {
+            throw new AppError('Account not found', 404);
         }
+
+        const accountData = account.toJSON() as any;
+
+        // Check if user already has a card
+        const userHasCard = await this.checkUserCardLimit(accountData.userId);
+        if (userHasCard) {
+            throw new AppError('User already owns a card. Limit is one card per user.', 400);
+        }
+
+        // Generate unique card number
+        let cardNumber: string;
+        let isUnique = false;
+        let attempts = 0;
+        const maxAttempts = 10;
+
+        while (!isUnique && attempts < maxAttempts) {
+            cardNumber = this.generateCardNumber();
+            const existing = await Card.findOne({ where: { cardNumber } });
+            if (!existing) {
+                isUnique = true;
+                break;
+            }
+            attempts++;
+        }
+
+        if (!isUnique) {
+            throw new AppError('Failed to generate unique card number', 500);
+        }
+
+        const cvv = this.generateCVV();
+        const expiryDate = new Date();
+        expiryDate.setFullYear(expiryDate.getFullYear() + 3);
+
+        const card = await Card.create({
+            accountId,
+            type,
+            cardNumber: cardNumber!,
+            cvv,
+            expiryDate,
+            status: 'active',
+        });
+
+        return card.toJSON();
     }
 
     static async getCardsByAccount(accountId: string) {
-        const client = await pool.connect();
-        try {
-            const result = await client.query('SELECT * FROM cards WHERE "accountId" = $1', [accountId]);
-            return result.rows;
-        } finally {
-            client.release();
-        }
+        const cards = await Card.findAll({
+            where: { accountId },
+        });
+
+        return cards.map(card => card.toJSON());
     }
 
     static async deleteCard(cardId: string) {
-        const client = await pool.connect();
-        try {
-            await client.query('DELETE FROM cards WHERE id = $1', [cardId]);
-        } finally {
-            client.release();
+        const card = await Card.findByPk(cardId);
+        if (!card) {
+            throw new AppError('Card not found', 404);
         }
+        await card.destroy();
     }
 }

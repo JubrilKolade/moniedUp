@@ -1,5 +1,6 @@
-import pool from '../config/db.js';
+import { Account, User } from '../models/index.js';
 import { AppError } from '../middleware/error.middleware.js';
+import { Op } from 'sequelize';
 
 export class AccountService {
     static async generateUniqueAccountNumber(): Promise<string> {
@@ -8,87 +9,72 @@ export class AccountService {
         let attempts = 0;
         const maxAttempts = 10;
 
-        const client = await pool.connect();
-        try {
-            while (!isUnique && attempts < maxAttempts) {
-                accountNumber = Math.floor(1000000000 + Math.random() * 9000000000).toString();
-                const result = await client.query('SELECT id FROM accounts WHERE "accountNumber" = $1', [accountNumber]);
+        while (!isUnique && attempts < maxAttempts) {
+            accountNumber = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+            const existing = await Account.findOne({ where: { accountNumber } });
 
-                if (result.rows.length === 0) {
-                    isUnique = true;
-                    return accountNumber;
-                }
-                attempts++;
+            if (!existing) {
+                isUnique = true;
+                return accountNumber;
             }
-        } finally {
-            client.release();
+            attempts++;
         }
 
         throw new AppError('Failed to generate unique account number', 500);
     }
 
     static async createAccount(userId: string, type: string) {
-        const client = await pool.connect();
-        try {
-            // Verify user exists
-            const userResult = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
-            if (userResult.rows.length === 0) {
-                throw new AppError('User not found', 404);
-            }
-
-            const accountNumber = await this.generateUniqueAccountNumber();
-
-            const result = await client.query(
-                `INSERT INTO accounts ("userId", type, "accountNumber", balance, status)
-                 VALUES ($1, $2, $3, $4, $5)
-                 RETURNING *`,
-                [userId, type, accountNumber, 0, 'active']
-            );
-
-            return result.rows[0];
-        } finally {
-            client.release();
+        // Verify user exists
+        const user = await User.findByPk(userId);
+        if (!user) {
+            throw new AppError('User not found', 404);
         }
+
+        const accountNumber = await this.generateUniqueAccountNumber();
+
+        // Create account
+        const account = await Account.create({
+            userId,
+            type,
+            accountNumber,
+            balance: 0,
+            status: 'active',
+        });
+
+        return account.toJSON();
     }
 
     static async getAccountByUserId(userId: string) {
-        const client = await pool.connect();
-        try {
-            const result = await client.query(
-                'SELECT * FROM accounts WHERE "userId" = $1 LIMIT 1',
-                [userId]
-            );
+        const account = await Account.findOne({
+            where: { userId },
+        });
 
-            if (result.rows.length === 0) {
-                throw new AppError('Account not found', 404);
-            }
-
-            return result.rows[0];
-        } finally {
-            client.release();
+        if (!account) {
+            throw new AppError('Account not found', 404);
         }
+
+        return account.toJSON();
     }
 
     static async getAccountById(accountId: string) {
-        const client = await pool.connect();
-        try {
-            const result = await client.query(
-                'SELECT a.*, u.id as "userId", u.tier, u."kycStatus" FROM accounts a JOIN users u ON a."userId" = u.id WHERE a.id = $1',
-                [accountId]
-            );
+        // Include user data (similar to populate in Mongoose)
+        const account = await Account.findByPk(accountId, {
+            include: [{
+                model: User,
+                as: 'user',
+                attributes: ['id', 'tier', 'kycStatus'],
+            }],
+        });
 
-            if (result.rows.length === 0) {
-                throw new AppError('Account not found', 404);
-            }
-
-            return result.rows[0];
-        } finally {
-            client.release();
+        if (!account) {
+            throw new AppError('Account not found', 404);
         }
+
+        return account.toJSON();
     }
 
     static async getBalance(userId: string) {
         const account = await this.getAccountByUserId(userId);
-        return account.balance;
+        return parseFloat(account.balance);
     }
 }

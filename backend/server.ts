@@ -1,7 +1,8 @@
 // Load environment variables FIRST before any other imports
 import 'dotenv/config';
 import express from 'express';
-import pool from './config/db.js';
+import { connectDB } from './config/db.js';
+import './models/index.js'; // Import models to register them
 import userRoutes from './routes/user.route.js';
 import accountRoutes from './routes/account.route.js';
 import transactionRoutes from './routes/transaction.route.js';
@@ -57,10 +58,14 @@ app.use(errorHandler);
 const server = app.listen(PORT, async () => {
     console.log(`Server is running on http://localhost:${PORT}`);
     try {
-        const client = await pool.connect();
-        await client.query('SELECT NOW()');
-        client.release();
-        console.log('Database connection established successfully.');
+        await connectDB();
+        // Sync models with database (creates tables if they don't exist)
+        // In production, use migrations instead of sync
+        if (process.env.NODE_ENV !== 'production') {
+            const { sequelize } = await import('./models/index.js');
+            await sequelize.sync({ alter: false }); // Set to true to update existing tables
+            console.log('✅ Database models synced.');
+        }
     } catch (error) {
         console.error('Unable to connect to the database:', error);
         process.exit(1);
@@ -72,7 +77,8 @@ process.on('SIGTERM', async () => {
     console.log('SIGTERM signal received: closing HTTP server');
     server.close(async () => {
         console.log('HTTP server closed');
-        await pool.end();
+        const { sequelize } = await import('./models/index.js');
+        await sequelize.close();
         console.log('Database connection closed');
         process.exit(0);
     });
@@ -82,7 +88,8 @@ process.on('SIGINT', async () => {
     console.log('SIGINT signal received: closing HTTP server');
     server.close(async () => {
         console.log('HTTP server closed');
-        await pool.end();
+        const { sequelize } = await import('./models/index.js');
+        await sequelize.close();
         console.log('Database connection closed');
         process.exit(0);
     });

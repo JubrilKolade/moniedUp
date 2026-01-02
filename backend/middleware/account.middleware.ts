@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import pool from '../config/db.js';
+import { Account } from '../models/index.js';
 import type { AuthenticatedRequest } from './auth.middleware.js';
 
 export const authorizeAccountAccess = async (
@@ -21,25 +21,23 @@ export const authorizeAccountAccess = async (
             return;
         }
 
-        const client = await pool.connect();
-        try {
-            const result = await client.query('SELECT "userId" FROM accounts WHERE id = $1', [accountId]);
+        // Find account (similar to Account.findById in Mongoose)
+        const account = await Account.findByPk(accountId, {
+            attributes: ['userId'], // Only select userId
+        });
 
-            if (result.rows.length === 0) {
-                res.status(404).json({ success: false, message: 'Account not found' });
-                return;
-            }
-
-            const account = result.rows[0];
-            if (account.userId === authReq.userId || authReq.userRole === 'admin') {
-                next();
-                return;
-            }
-
-            res.status(403).json({ success: false, message: 'Forbidden: You can only access your own accounts' });
-        } finally {
-            client.release();
+        if (!account) {
+            res.status(404).json({ success: false, message: 'Account not found' });
+            return;
         }
+
+        const accountData = account.toJSON();
+        if (accountData.userId === authReq.userId || authReq.userRole === 'admin') {
+            next();
+            return;
+        }
+
+        res.status(403).json({ success: false, message: 'Forbidden: You can only access your own accounts' });
     } catch (error) {
         next(error);
     }
@@ -59,47 +57,48 @@ export const authorizeTransactionAccounts = async (
             return;
         }
 
-        const client = await pool.connect();
-        try {
-            if (fromAccountId && toAccountId) {
-                const fromResult = await client.query('SELECT "userId" FROM accounts WHERE id = $1', [fromAccountId]);
-                const toResult = await client.query('SELECT "userId" FROM accounts WHERE id = $1', [toAccountId]);
+        if (fromAccountId && toAccountId) {
+            // Find both accounts (using Promise.all like in Mongoose)
+            const [fromAccount, toAccount] = await Promise.all([
+                Account.findByPk(fromAccountId, { attributes: ['userId'] }),
+                Account.findByPk(toAccountId, { attributes: ['userId'] }),
+            ]);
 
-                if (fromResult.rows.length === 0 || toResult.rows.length === 0) {
-                    res.status(404).json({ success: false, message: 'One or both accounts not found' });
-                    return;
-                }
-
-                if (fromResult.rows[0].userId !== authReq.userId && authReq.userRole !== 'admin') {
-                    res.status(403).json({ success: false, message: 'Forbidden: You can only transfer from your own accounts' });
-                    return;
-                }
-            } else if (fromAccountId) {
-                const result = await client.query('SELECT "userId" FROM accounts WHERE id = $1', [fromAccountId]);
-                if (result.rows.length === 0) {
-                    res.status(404).json({ success: false, message: 'Account not found' });
-                    return;
-                }
-                if (result.rows[0].userId !== authReq.userId && authReq.userRole !== 'admin') {
-                    res.status(403).json({ success: false, message: 'Forbidden: You can only withdraw from your own accounts' });
-                    return;
-                }
-            } else if (toAccountId) {
-                const result = await client.query('SELECT "userId" FROM accounts WHERE id = $1', [toAccountId]);
-                if (result.rows.length === 0) {
-                    res.status(404).json({ success: false, message: 'Account not found' });
-                    return;
-                }
-                if (result.rows[0].userId !== authReq.userId && authReq.userRole !== 'admin') {
-                    res.status(403).json({ success: false, message: 'Forbidden: You can only deposit to your own accounts' });
-                    return;
-                }
+            if (!fromAccount || !toAccount) {
+                res.status(404).json({ success: false, message: 'One or both accounts not found' });
+                return;
             }
 
-            next();
-        } finally {
-            client.release();
+            const fromData = fromAccount.toJSON();
+            if (fromData.userId !== authReq.userId && authReq.userRole !== 'admin') {
+                res.status(403).json({ success: false, message: 'Forbidden: You can only transfer from your own accounts' });
+                return;
+            }
+        } else if (fromAccountId) {
+            const account = await Account.findByPk(fromAccountId, { attributes: ['userId'] });
+            if (!account) {
+                res.status(404).json({ success: false, message: 'Account not found' });
+                return;
+            }
+            const accountData = account.toJSON();
+            if (accountData.userId !== authReq.userId && authReq.userRole !== 'admin') {
+                res.status(403).json({ success: false, message: 'Forbidden: You can only withdraw from your own accounts' });
+                return;
+            }
+        } else if (toAccountId) {
+            const account = await Account.findByPk(toAccountId, { attributes: ['userId'] });
+            if (!account) {
+                res.status(404).json({ success: false, message: 'Account not found' });
+                return;
+            }
+            const accountData = account.toJSON();
+            if (accountData.userId !== authReq.userId && authReq.userRole !== 'admin') {
+                res.status(403).json({ success: false, message: 'Forbidden: You can only deposit to your own accounts' });
+                return;
+            }
         }
+
+        next();
     } catch (error) {
         next(error);
     }
