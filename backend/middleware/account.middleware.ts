@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import prisma from '../config/db.js';
+import pool from '../config/db.js';
 import type { AuthenticatedRequest } from './auth.middleware.js';
 
 export const authorizeAccountAccess = async (
@@ -9,7 +9,6 @@ export const authorizeAccountAccess = async (
 ): Promise<void> => {
     try {
         const authReq = req as AuthenticatedRequest;
-        // Check params first, then body for accountId
         const accountId = req.params.accountId || req.body.accountId;
 
         if (!accountId) {
@@ -22,29 +21,30 @@ export const authorizeAccountAccess = async (
             return;
         }
 
-        const account = await prisma.account.findUnique({
-            where: { id: accountId },
-            select: { userId: true },
-        });
+        const client = await pool.connect();
+        try {
+            const result = await client.query('SELECT "userId" FROM accounts WHERE id = $1', [accountId]);
 
-        if (!account) {
-            res.status(404).json({ success: false, message: 'Account not found' });
-            return;
+            if (result.rows.length === 0) {
+                res.status(404).json({ success: false, message: 'Account not found' });
+                return;
+            }
+
+            const account = result.rows[0];
+            if (account.userId === authReq.userId || authReq.userRole === 'admin') {
+                next();
+                return;
+            }
+
+            res.status(403).json({ success: false, message: 'Forbidden: You can only access your own accounts' });
+        } finally {
+            client.release();
         }
-
-        // Allow if user owns the account or is admin
-        if (account.userId === authReq.userId || authReq.userRole === 'admin') {
-            next();
-            return;
-        }
-
-        res.status(403).json({ success: false, message: 'Forbidden: You can only access your own accounts' });
     } catch (error) {
         next(error);
     }
 };
 
-// For transactions that involve multiple accounts (transfers)
 export const authorizeTransactionAccounts = async (
     req: Request,
     res: Response,
@@ -59,60 +59,48 @@ export const authorizeTransactionAccounts = async (
             return;
         }
 
-        // For transfers, check both accounts
-        if (fromAccountId && toAccountId) {
-            const [fromAccount, toAccount] = await Promise.all([
-                prisma.account.findUnique({ where: { id: fromAccountId }, select: { userId: true } }),
-                prisma.account.findUnique({ where: { id: toAccountId }, select: { userId: true } }),
-            ]);
+        const client = await pool.connect();
+        try {
+            if (fromAccountId && toAccountId) {
+                const fromResult = await client.query('SELECT "userId" FROM accounts WHERE id = $1', [fromAccountId]);
+                const toResult = await client.query('SELECT "userId" FROM accounts WHERE id = $1', [toAccountId]);
 
-            if (!fromAccount || !toAccount) {
-                res.status(404).json({ success: false, message: 'One or both accounts not found' });
-                return;
+                if (fromResult.rows.length === 0 || toResult.rows.length === 0) {
+                    res.status(404).json({ success: false, message: 'One or both accounts not found' });
+                    return;
+                }
+
+                if (fromResult.rows[0].userId !== authReq.userId && authReq.userRole !== 'admin') {
+                    res.status(403).json({ success: false, message: 'Forbidden: You can only transfer from your own accounts' });
+                    return;
+                }
+            } else if (fromAccountId) {
+                const result = await client.query('SELECT "userId" FROM accounts WHERE id = $1', [fromAccountId]);
+                if (result.rows.length === 0) {
+                    res.status(404).json({ success: false, message: 'Account not found' });
+                    return;
+                }
+                if (result.rows[0].userId !== authReq.userId && authReq.userRole !== 'admin') {
+                    res.status(403).json({ success: false, message: 'Forbidden: You can only withdraw from your own accounts' });
+                    return;
+                }
+            } else if (toAccountId) {
+                const result = await client.query('SELECT "userId" FROM accounts WHERE id = $1', [toAccountId]);
+                if (result.rows.length === 0) {
+                    res.status(404).json({ success: false, message: 'Account not found' });
+                    return;
+                }
+                if (result.rows[0].userId !== authReq.userId && authReq.userRole !== 'admin') {
+                    res.status(403).json({ success: false, message: 'Forbidden: You can only deposit to your own accounts' });
+                    return;
+                }
             }
 
-            // User must own the fromAccount (or be admin)
-            if (fromAccount.userId !== authReq.userId && authReq.userRole !== 'admin') {
-                res.status(403).json({ success: false, message: 'Forbidden: You can only transfer from your own accounts' });
-                return;
-            }
-        } else if (fromAccountId) {
-            // For withdrawals
-            const account = await prisma.account.findUnique({
-                where: { id: fromAccountId },
-                select: { userId: true },
-            });
-
-            if (!account) {
-                res.status(404).json({ success: false, message: 'Account not found' });
-                return;
-            }
-
-            if (account.userId !== authReq.userId && authReq.userRole !== 'admin') {
-                res.status(403).json({ success: false, message: 'Forbidden: You can only withdraw from your own accounts' });
-                return;
-            }
-        } else if (toAccountId) {
-            // For deposits
-            const account = await prisma.account.findUnique({
-                where: { id: toAccountId },
-                select: { userId: true },
-            });
-
-            if (!account) {
-                res.status(404).json({ success: false, message: 'Account not found' });
-                return;
-            }
-
-            if (account.userId !== authReq.userId && authReq.userRole !== 'admin') {
-                res.status(403).json({ success: false, message: 'Forbidden: You can only deposit to your own accounts' });
-                return;
-            }
+            next();
+        } finally {
+            client.release();
         }
-
-        next();
     } catch (error) {
         next(error);
     }
 };
-

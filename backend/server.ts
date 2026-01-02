@@ -1,6 +1,7 @@
-import dotenv from 'dotenv';
+// Load environment variables FIRST before any other imports
+import 'dotenv/config';
 import express from 'express';
-import prisma from './config/db.js';
+import pool from './config/db.js';
 import userRoutes from './routes/user.route.js';
 import accountRoutes from './routes/account.route.js';
 import transactionRoutes from './routes/transaction.route.js';
@@ -8,8 +9,6 @@ import twoFactorRoutes from './routes/twoFactor.route.js';
 import adminRoutes from './routes/admin.route.js';
 import cardRoutes from './routes/card.route.js';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware.js';
-
-dotenv.config();
 
 // Validate required environment variables
 if (!process.env.JWT_SECRET) {
@@ -58,7 +57,9 @@ app.use(errorHandler);
 const server = app.listen(PORT, async () => {
     console.log(`Server is running on http://localhost:${PORT}`);
     try {
-        await prisma.$connect();
+        const client = await pool.connect();
+        await client.query('SELECT NOW()');
+        client.release();
         console.log('Database connection established successfully.');
     } catch (error) {
         console.error('Unable to connect to the database:', error);
@@ -71,7 +72,7 @@ process.on('SIGTERM', async () => {
     console.log('SIGTERM signal received: closing HTTP server');
     server.close(async () => {
         console.log('HTTP server closed');
-        await prisma.$disconnect();
+        await pool.end();
         console.log('Database connection closed');
         process.exit(0);
     });
@@ -81,7 +82,7 @@ process.on('SIGINT', async () => {
     console.log('SIGINT signal received: closing HTTP server');
     server.close(async () => {
         console.log('HTTP server closed');
-        await prisma.$disconnect();
+        await pool.end();
         console.log('Database connection closed');
         process.exit(0);
     });

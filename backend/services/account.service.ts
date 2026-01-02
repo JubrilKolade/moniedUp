@@ -1,4 +1,4 @@
-import prisma from '../config/db.js';
+import pool from '../config/db.js';
 import { AppError } from '../middleware/error.middleware.js';
 
 export class AccountService {
@@ -8,65 +8,83 @@ export class AccountService {
         let attempts = 0;
         const maxAttempts = 10;
 
-        while (!isUnique && attempts < maxAttempts) {
-            accountNumber = Math.floor(1000000000 + Math.random() * 9000000000).toString();
-            const existing = await prisma.account.findUnique({
-                where: { accountNumber },
-            });
+        const client = await pool.connect();
+        try {
+            while (!isUnique && attempts < maxAttempts) {
+                accountNumber = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+                const result = await client.query('SELECT id FROM accounts WHERE "accountNumber" = $1', [accountNumber]);
 
-            if (!existing) {
-                isUnique = true;
-                return accountNumber;
+                if (result.rows.length === 0) {
+                    isUnique = true;
+                    return accountNumber;
+                }
+                attempts++;
             }
-            attempts++;
+        } finally {
+            client.release();
         }
 
         throw new AppError('Failed to generate unique account number', 500);
     }
 
     static async createAccount(userId: string, type: string) {
-        // Verify user exists
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (!user) {
-            throw new AppError('User not found', 404);
+        const client = await pool.connect();
+        try {
+            // Verify user exists
+            const userResult = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
+            if (userResult.rows.length === 0) {
+                throw new AppError('User not found', 404);
+            }
+
+            const accountNumber = await this.generateUniqueAccountNumber();
+
+            const result = await client.query(
+                `INSERT INTO accounts ("userId", type, "accountNumber", balance, status)
+                 VALUES ($1, $2, $3, $4, $5)
+                 RETURNING *`,
+                [userId, type, accountNumber, 0, 'active']
+            );
+
+            return result.rows[0];
+        } finally {
+            client.release();
         }
-
-        const accountNumber = await this.generateUniqueAccountNumber();
-
-        const account = await prisma.account.create({
-            data: {
-                userId,
-                type,
-                accountNumber,
-            },
-        });
-
-        return account;
     }
 
     static async getAccountByUserId(userId: string) {
-        const account = await prisma.account.findFirst({
-            where: { userId },
-        });
+        const client = await pool.connect();
+        try {
+            const result = await client.query(
+                'SELECT * FROM accounts WHERE "userId" = $1 LIMIT 1',
+                [userId]
+            );
 
-        if (!account) {
-            throw new AppError('Account not found', 404);
+            if (result.rows.length === 0) {
+                throw new AppError('Account not found', 404);
+            }
+
+            return result.rows[0];
+        } finally {
+            client.release();
         }
-
-        return account;
     }
 
     static async getAccountById(accountId: string) {
-        const account = await prisma.account.findUnique({
-            where: { id: accountId },
-            include: { user: true },
-        });
+        const client = await pool.connect();
+        try {
+            const result = await client.query(
+                'SELECT a.*, u.id as "userId", u.tier, u."kycStatus" FROM accounts a JOIN users u ON a."userId" = u.id WHERE a.id = $1',
+                [accountId]
+            );
 
-        if (!account) {
-            throw new AppError('Account not found', 404);
+            if (result.rows.length === 0) {
+                throw new AppError('Account not found', 404);
+            }
+
+            return result.rows[0];
+        } finally {
+            client.release();
         }
-
-        return account;
     }
 
     static async getBalance(userId: string) {
@@ -74,4 +92,3 @@ export class AccountService {
         return account.balance;
     }
 }
-

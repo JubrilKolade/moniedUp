@@ -26,20 +26,20 @@ export const errorHandler = (
         return;
     }
 
-    // Handle Prisma errors
-    if (err.name === 'PrismaClientKnownRequestError') {
-        const prismaError = err as any;
-        if (prismaError.code === 'P2002') {
+    // Handle PostgreSQL errors
+    if (err.name === 'error' && (err as any).code) {
+        const pgError = err as any;
+        if (pgError.code === '23505') { // Unique violation
             res.status(409).json({
                 success: false,
                 message: 'A record with this information already exists',
             });
             return;
         }
-        if (prismaError.code === 'P2025') {
-            res.status(404).json({
+        if (pgError.code === '23503') { // Foreign key violation
+            res.status(400).json({
                 success: false,
-                message: 'Record not found',
+                message: 'Invalid reference to related record',
             });
             return;
         }
