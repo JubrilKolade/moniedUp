@@ -39,12 +39,12 @@ app.use((req, res, next) => {
 });
 
 // Routes
-app.use('/api/users', userRoutes);
-app.use('/api/accounts', accountRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/two-factor', twoFactorRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/cards', cardRoutes);
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/accounts', accountRoutes);
+app.use('/api/v1/transactions', transactionRoutes);
+app.use('/api/v1/two-factor', twoFactorRoutes);
+app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/cards', cardRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
