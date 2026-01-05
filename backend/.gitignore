@@ -37,6 +37,7 @@ Thumbs.db
 # Sequelize
 src/migrations/
 src/seeders/
+/scripts
 # Optional npm cache directory
 .npm
 # Optional eslint cache

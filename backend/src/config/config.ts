@@ -13,7 +13,13 @@ export default {
   development: {
     url: process.env.DATABASE_URL,
     dialect: 'postgres',
-    logging: console.log
+    logging: console.log,
+    dialectOptions: {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false
+      }
+    }
   },
   test: {
     url: process.env.TEST_DATABASE_URL || 'postgres://localhost:5432/test_db',
