@@ -196,9 +196,3 @@ This project does not include an explicit license file. Add a `LICENSE` if you w
 
 ---
 
-If you'd like, I can:
-- add more example requests,
-- add badges (build, coverage), or
-- create a quick Postman collection for the API.
-
-Let me know which you'd prefer! ✨
