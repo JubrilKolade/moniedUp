@@ -11,6 +11,7 @@ import adminRoutes from './routes/admin.route.js';
 import cardRoutes from './routes/card.route.js';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware.js';
 
+
 // Validate required environment variables
 if (!process.env.JWT_SECRET) {
     console.error('ERROR: JWT_SECRET environment variable is not set');
