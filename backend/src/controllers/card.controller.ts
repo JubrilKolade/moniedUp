@@ -14,6 +14,9 @@ export const createCard = async (req: Request, res: Response, next: any) => {
 export const getCards = async (req: Request, res: Response, next: any) => {
     try {
         const { accountId } = req.params;
+        if (!accountId) {
+            return res.status(400).json({ success: false, message: 'Account ID is required' });
+        }
         const cards = await CardService.getCardsByAccount(accountId);
         res.status(200).json({ success: true, data: cards });
     } catch (error) {
@@ -24,8 +27,11 @@ export const getCards = async (req: Request, res: Response, next: any) => {
 export const deleteCard = async (req: Request, res: Response, next: any) => {
     try {
         const { cardId } = req.params;
-        await CardService.deleteCard(cardId);
-        res.status(200).json({ success: true, message: 'Card deleted successfully' });
+        if (!cardId) {
+            return res.status(400).json({ success: false, message: 'Card ID is required' });
+        }
+        await CardService.deactivateCard(cardId);
+        res.status(200).json({ success: true, message: 'Card deactivated successfully' });
     } catch (error) {
         next(error);
     }

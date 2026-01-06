@@ -75,6 +75,6 @@ export class AccountService {
 
     static async getBalance(userId: string) {
         const account = await this.getAccountByUserId(userId);
-        return parseFloat(account.balance);
+        return Number(account.balance);
     }
 }

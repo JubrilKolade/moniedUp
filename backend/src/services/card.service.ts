@@ -102,11 +102,11 @@ export class CardService {
         return cards.map(card => card.toJSON());
     }
 
-    static async deleteCard(cardId: string) {
+    static async deactivateCard(cardId: string) {
         const card = await Card.findByPk(cardId);
         if (!card) {
             throw new AppError('Card not found', 404);
         }
-        await card.destroy();
+        await card.update({ status: 'blocked' });
     }
 }

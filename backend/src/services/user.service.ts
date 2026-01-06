@@ -86,4 +86,22 @@ export class UserService {
 
         return users.map(user => user.toJSON());
     }
+
+    static async requestKyc(userId: string) {
+        const user = await User.findByPk(userId);
+        if (!user) throw new AppError('User not found', 404);
+        if (user.kycStatus === 'verified') throw new AppError('User already verified', 400);
+        if (user.kycStatus === 'pending') throw new AppError('KYC already pending', 400);
+
+        await user.update({ kycStatus: 'pending' });
+        return { message: 'KYC requested successfully' };
+    }
+
+    static async updateKycStatus(userId: string, status: 'verified' | 'rejected') {
+        const user = await User.findByPk(userId);
+        if (!user) throw new AppError('User not found', 404);
+
+        await user.update({ kycStatus: status });
+        return { message: `KYC status updated to ${status}` };
+    }
 }

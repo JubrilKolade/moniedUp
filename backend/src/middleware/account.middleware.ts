@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { Account } from '../models/index.js';
+import { Account, Card } from '../models/index.js';
 import type { AuthenticatedRequest } from './auth.middleware.js';
 
 export const authorizeAccountAccess = async (
@@ -99,6 +99,50 @@ export const authorizeTransactionAccounts = async (
         }
 
         next();
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const authorizeCardAccess = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> => {
+    try {
+        const authReq = req as AuthenticatedRequest;
+        const { cardId } = req.params;
+
+        if (!authReq.userId) {
+            res.status(401).json({ success: false, message: 'Unauthorized' });
+            return;
+        }
+
+        if (!cardId) {
+            res.status(400).json({ success: false, message: 'Card ID required' });
+            return;
+        }
+
+        const card = await Card.findByPk(cardId, {
+            include: [{
+                model: Account,
+                as: 'account',
+                attributes: ['userId'],
+            }],
+        });
+
+        if (!card) {
+            res.status(404).json({ success: false, message: 'Card not found' });
+            return;
+        }
+
+        const cardData = card.toJSON() as any;
+        if (cardData.account.userId === authReq.userId || authReq.userRole === 'admin') {
+            next();
+            return;
+        }
+
+        res.status(403).json({ success: false, message: 'Forbidden: You can only access your own cards' });
     } catch (error) {
         next(error);
     }

@@ -2,7 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 import type { Optional } from 'sequelize';
 import sequelize from '../config/db.js';
 
-interface AccountAttributes {
+export interface AccountAttributes {
     id: string;
     accountNumber: string;
     type: string;
@@ -13,7 +13,7 @@ interface AccountAttributes {
     updatedAt?: Date;
 }
 
-interface AccountCreationAttributes extends Optional<AccountAttributes, 'id' | 'balance' | 'status' | 'createdAt' | 'updatedAt'> {}
+interface AccountCreationAttributes extends Optional<AccountAttributes, 'id' | 'balance' | 'status' | 'createdAt' | 'updatedAt'> { }
 
 class Account extends Model<AccountAttributes, AccountCreationAttributes> implements AccountAttributes {
     public id!: string;

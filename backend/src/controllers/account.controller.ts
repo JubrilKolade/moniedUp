@@ -38,3 +38,8 @@ export const getBalance = async (req: Request, res: Response, next: any) => {
         next(error);
     }
 };
+
+//update account
+
+//get account information
+

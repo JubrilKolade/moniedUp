@@ -85,3 +85,16 @@ export const getUserProfile = async (req: Request, res: Response, next: any) => 
         next(error);
     }
 };
+
+export const requestKyc = async (req: Request, res: Response, next: any) => {
+    try {
+        const authReq = req as AuthenticatedRequest;
+        if (!authReq.userId) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+        const result = await UserService.requestKyc(authReq.userId);
+        res.status(200).json({ success: true, ...result });
+    } catch (error) {
+        next(error);
+    }
+};

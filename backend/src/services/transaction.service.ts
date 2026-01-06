@@ -66,7 +66,7 @@ export class TransactionService {
                 amount,
                 type: 'transfer',
                 status: 'completed',
-                description,
+                description: description || null,
                 fromAccountId,
                 toAccountId,
                 performedByUserId,
@@ -101,7 +101,7 @@ export class TransactionService {
                 amount,
                 type: 'deposit',
                 status: 'completed',
-                description,
+                description: description || null,
                 toAccountId,
                 performedByUserId,
             }, { transaction });
@@ -161,7 +161,7 @@ export class TransactionService {
                 amount,
                 type: 'withdrawal',
                 status: 'completed',
-                description,
+                description: description || null,
                 fromAccountId,
                 performedByUserId,
             }, { transaction });
@@ -174,15 +174,17 @@ export class TransactionService {
         }
     }
 
-    static async getTransactionHistory(accountId: string) {
-        // Find transactions where account is sender or receiver
-        const transactions = await Transaction.findAll({
+    static async getTransactionHistory(accountId: string, page: number = 1, limit: number = 20) {
+        const offset = (page - 1) * limit;
+        const { count, rows } = await Transaction.findAndCountAll({
             where: {
                 [Op.or]: [
                     { fromAccountId: accountId },
                     { toAccountId: accountId }
                 ]
             },
+            limit,
+            offset,
             include: [
                 {
                     model: Account,
@@ -208,6 +210,11 @@ export class TransactionService {
             order: [['createdAt', 'DESC']],
         });
 
-        return transactions.map(t => t.toJSON());
+        return {
+            total: count,
+            totalPages: Math.ceil(count / limit),
+            currentPage: page,
+            transactions: rows.map(t => t.toJSON()),
+        };
     }
 }

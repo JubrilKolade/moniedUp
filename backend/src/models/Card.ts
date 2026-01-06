@@ -2,7 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 import type { Optional } from 'sequelize';
 import sequelize from '../config/db.js';
 
-interface CardAttributes {
+export interface CardAttributes {
     id: string;
     cardNumber: string;
     type: string;
@@ -13,7 +13,7 @@ interface CardAttributes {
     issuedAt?: Date;
 }
 
-interface CardCreationAttributes extends Optional<CardAttributes, 'id' | 'status' | 'issuedAt'> {}
+interface CardCreationAttributes extends Optional<CardAttributes, 'id' | 'status' | 'issuedAt'> { }
 
 class Card extends Model<CardAttributes, CardCreationAttributes> implements CardAttributes {
     public id!: string;

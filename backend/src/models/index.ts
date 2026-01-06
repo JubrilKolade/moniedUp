@@ -4,6 +4,7 @@ import Account from './Account.js';
 import Transaction from './Transaction.js';
 import Card from './Card.js';
 import Admin from './Admin.js';
+import AuditLog from './AuditLog.js';
 
 // Define relationships (similar to Mongoose populate)
 // User has many Accounts
@@ -32,6 +33,7 @@ export {
     Account,
     Transaction,
     Card,
-    Admin
+    Admin,
+    AuditLog
 };
 

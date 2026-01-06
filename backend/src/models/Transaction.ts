@@ -2,7 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 import type { Optional } from 'sequelize';
 import sequelize from '../config/db.js';
 
-interface TransactionAttributes {
+export interface TransactionAttributes {
     id: string;
     amount: number;
     type: string;
@@ -15,7 +15,7 @@ interface TransactionAttributes {
     updatedAt?: Date;
 }
 
-interface TransactionCreationAttributes extends Optional<TransactionAttributes, 'id' | 'status' | 'description' | 'fromAccountId' | 'toAccountId' | 'performedByUserId' | 'createdAt' | 'updatedAt'> {}
+interface TransactionCreationAttributes extends Optional<TransactionAttributes, 'id' | 'status' | 'description' | 'fromAccountId' | 'toAccountId' | 'performedByUserId' | 'createdAt' | 'updatedAt'> { }
 
 class Transaction extends Model<TransactionAttributes, TransactionCreationAttributes> implements TransactionAttributes {
     public id!: string;

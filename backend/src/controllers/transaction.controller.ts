@@ -69,8 +69,14 @@ export const createTransaction = async (req: Request, res: Response, next: any) 
 export const getTransactionHistory = async (req: Request, res: Response, next: any) => {
     try {
         const { accountId } = req.params;
-        const transactions = await TransactionService.getTransactionHistory(accountId);
-        res.status(200).json({ success: true, data: transactions });
+        if (!accountId) {
+            return res.status(400).json({ success: false, message: 'Account ID is required' });
+        }
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 20;
+
+        const result = await TransactionService.getTransactionHistory(accountId, page, limit);
+        res.status(200).json({ success: true, data: result });
     } catch (error) {
         next(error);
     }
