@@ -16,15 +16,15 @@ export interface AccountAttributes {
 interface AccountCreationAttributes extends Optional<AccountAttributes, 'id' | 'balance' | 'status' | 'createdAt' | 'updatedAt'> { }
 
 class Account extends Model<AccountAttributes, AccountCreationAttributes> implements AccountAttributes {
-    public id!: string;
-    public accountNumber!: string;
-    public type!: string;
-    public balance!: number;
-    public status!: string;
-    public userId!: string;
+    declare public id: string;
+    declare public accountNumber: string;
+    declare public type: string;
+    declare public balance: number;
+    declare public status: string;
+    declare public userId: string;
 
-    public readonly createdAt!: Date;
-    public readonly updatedAt!: Date;
+    declare public readonly createdAt: Date;
+    declare public readonly updatedAt: Date;
 }
 
 Account.init(
