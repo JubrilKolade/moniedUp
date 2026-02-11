@@ -38,7 +38,12 @@ export class UserService {
             throw new AppError('Invalid credentials', 401);
         }
 
-        // Return user data (password will be checked in controller with bcrypt)
+        const isPasswordValid = await user.validatePassword(password);
+        if (!isPasswordValid) {
+            throw new AppError('Invalid credentials', 401);
+        }
+
+        // Return user data
         return user.toJSON();
     }
 
