@@ -4,7 +4,10 @@ import type { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 
 export const createTransaction = async (req: Request, res: Response, next: any) => {
     try {
-        const { fromAccountId, toAccountId, amount, type, description } = req.body;
+        const { fromAccountId, toAccountId, amount, type, description, idempotencyKey: bodyIdempotencyKey } = req.body;
+        // Check headers for idempotency key (standard practice) or body
+        const idempotencyKey = (req.headers['idempotency-key'] as string) || bodyIdempotencyKey;
+
         const authReq = req as AuthenticatedRequest;
         if (!authReq.userId) {
             return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -25,7 +28,8 @@ export const createTransaction = async (req: Request, res: Response, next: any) 
                 toAccountId,
                 amount,
                 description,
-                performedByUserId
+                performedByUserId,
+                idempotencyKey
             );
         } else if (type === 'deposit') {
             if (!toAccountId) {
@@ -38,7 +42,8 @@ export const createTransaction = async (req: Request, res: Response, next: any) 
                 toAccountId,
                 amount,
                 description,
-                performedByUserId
+                performedByUserId,
+                idempotencyKey
             );
         } else if (type === 'withdrawal') {
             if (!fromAccountId) {
@@ -51,7 +56,8 @@ export const createTransaction = async (req: Request, res: Response, next: any) 
                 fromAccountId,
                 amount,
                 description,
-                performedByUserId
+                performedByUserId,
+                idempotencyKey
             );
         } else {
             return res.status(400).json({
@@ -59,6 +65,37 @@ export const createTransaction = async (req: Request, res: Response, next: any) 
                 message: 'Invalid transaction type',
             });
         }
+
+        res.status(201).json({ success: true, data: transaction });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const createChargeback = async (req: Request, res: Response, next: any) => {
+    try {
+        const { transactionId } = req.params;
+        const { reason } = req.body;
+        const authReq = req as AuthenticatedRequest;
+
+        if (!authReq.userId) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        // TODO: Add Admin check here if chargebacks should be restricted
+
+        if (!transactionId) {
+            return res.status(400).json({ success: false, message: 'Transaction ID is required' });
+        }
+        if (!reason) {
+            return res.status(400).json({ success: false, message: 'Reason is required' });
+        }
+
+        const transaction = await TransactionService.createChargeback(
+            transactionId,
+            reason,
+            authReq.userId
+        );
 
         res.status(201).json({ success: true, data: transaction });
     } catch (error) {
