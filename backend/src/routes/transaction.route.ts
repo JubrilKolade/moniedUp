@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createTransaction, getTransactionHistory } from '../controllers/transaction.controller.js';
+import { createTransaction, getTransactionHistory, createChargeback } from '../controllers/transaction.controller.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 import { authorizeAccountAccess, authorizeTransactionAccounts } from '../middleware/account.middleware.js';
 import { validate } from '../middleware/validation.middleware.js';
@@ -8,6 +8,7 @@ import { createTransactionSchema, getTransactionHistorySchema } from '../validat
 const router = Router();
 
 router.post('/', authenticateToken, validate(createTransactionSchema), authorizeTransactionAccounts, createTransaction);
+router.post('/:transactionId/chargeback', authenticateToken, createChargeback); // TODO: Add specific validator
 router.get('/:accountId/history', authenticateToken, validate(getTransactionHistorySchema), authorizeAccountAccess, getTransactionHistory);
 
 export default router;
