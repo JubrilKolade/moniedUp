@@ -11,24 +11,28 @@ export interface TransactionAttributes {
     fromAccountId?: string | null;
     toAccountId?: string | null;
     performedByUserId?: string | null;
+    idempotencyKey?: string | null;
+    referenceTransactionId?: string | null;
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-interface TransactionCreationAttributes extends Optional<TransactionAttributes, 'id' | 'status' | 'description' | 'fromAccountId' | 'toAccountId' | 'performedByUserId' | 'createdAt' | 'updatedAt'> { }
+interface TransactionCreationAttributes extends Optional<TransactionAttributes, 'id' | 'status' | 'description' | 'fromAccountId' | 'toAccountId' | 'performedByUserId' | 'idempotencyKey' | 'referenceTransactionId' | 'createdAt' | 'updatedAt'> { }
 
 class Transaction extends Model<TransactionAttributes, TransactionCreationAttributes> implements TransactionAttributes {
-    public id!: string;
-    public amount!: number;
-    public type!: string;
-    public status!: string;
-    public description?: string | null;
-    public fromAccountId?: string | null;
-    public toAccountId?: string | null;
-    public performedByUserId?: string | null;
+    declare public id: string;
+    declare public amount: number;
+    declare public type: string;
+    declare public status: string;
+    declare public description?: string | null;
+    declare public fromAccountId?: string | null;
+    declare public toAccountId?: string | null;
+    declare public performedByUserId?: string | null;
+    declare public idempotencyKey?: string | null;
+    declare public referenceTransactionId?: string | null;
 
-    public readonly createdAt!: Date;
-    public readonly updatedAt!: Date;
+    declare public readonly createdAt: Date;
+    declare public readonly updatedAt: Date;
 }
 
 Transaction.init(
@@ -76,6 +80,19 @@ Transaction.init(
             allowNull: true,
             references: {
                 model: 'users',
+                key: 'id',
+            },
+        },
+        idempotencyKey: {
+            type: DataTypes.STRING,
+            allowNull: true,
+            unique: true, // Idempotency: Ensure key is unique
+        },
+        referenceTransactionId: {
+            type: DataTypes.UUID,
+            allowNull: true, // For chargebacks, this links to the original transaction
+            references: {
+                model: 'transactions',
                 key: 'id',
             },
         },
