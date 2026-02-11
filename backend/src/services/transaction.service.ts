@@ -16,8 +16,17 @@ export class TransactionService {
         toAccountId: string,
         amount: number,
         description: string | undefined,
-        performedByUserId: string
+        performedByUserId: string,
+        idempotencyKey?: string
     ) {
+        // Idempotency Check
+        if (idempotencyKey) {
+            const existingTransaction = await Transaction.findOne({ where: { idempotencyKey } });
+            if (existingTransaction) {
+                return existingTransaction.toJSON();
+            }
+        }
+
         // Use Sequelize transaction (similar to MongoDB sessions)
         const transaction = await Transaction.sequelize!.transaction();
 
@@ -35,7 +44,6 @@ export class TransactionService {
             const toAccount = await Account.findByPk(toAccountId, { transaction });
 
             if (!fromAccount || !toAccount) {
-                await transaction.rollback();
                 throw new AppError('One or both accounts not found', 404);
             }
 
@@ -44,7 +52,6 @@ export class TransactionService {
             // Check transaction limits
             const limit = this.getTransactionLimit(accountData.user.tier, accountData.user.kycStatus);
             if (amount > limit) {
-                await transaction.rollback();
                 throw new AppError(
                     `Transaction limit exceeded for ${accountData.user.tier} (${accountData.user.kycStatus}). Limit: ${limit}`,
                     400
@@ -53,7 +60,6 @@ export class TransactionService {
 
             // Check sufficient funds
             if (parseFloat(fromAccount.balance.toString()) < amount) {
-                await transaction.rollback();
                 throw new AppError('Insufficient funds', 400);
             }
 
@@ -70,6 +76,7 @@ export class TransactionService {
                 fromAccountId,
                 toAccountId,
                 performedByUserId,
+                idempotencyKey: idempotencyKey || null,
             }, { transaction });
 
             await transaction.commit();
@@ -84,8 +91,17 @@ export class TransactionService {
         toAccountId: string,
         amount: number,
         description: string | undefined,
-        performedByUserId: string
+        performedByUserId: string,
+        idempotencyKey?: string
     ) {
+        // Idempotency Check
+        if (idempotencyKey) {
+            const existingTransaction = await Transaction.findOne({ where: { idempotencyKey } });
+            if (existingTransaction) {
+                return existingTransaction.toJSON();
+            }
+        }
+
         const transaction = await Transaction.sequelize!.transaction();
 
         try {
@@ -104,6 +120,7 @@ export class TransactionService {
                 description: description || null,
                 toAccountId,
                 performedByUserId,
+                idempotencyKey: idempotencyKey || null,
             }, { transaction });
 
             await transaction.commit();
@@ -118,8 +135,17 @@ export class TransactionService {
         fromAccountId: string,
         amount: number,
         description: string | undefined,
-        performedByUserId: string
+        performedByUserId: string,
+        idempotencyKey?: string
     ) {
+        // Idempotency Check
+        if (idempotencyKey) {
+            const existingTransaction = await Transaction.findOne({ where: { idempotencyKey } });
+            if (existingTransaction) {
+                return existingTransaction.toJSON();
+            }
+        }
+
         const transaction = await Transaction.sequelize!.transaction();
 
         try {
@@ -133,7 +159,6 @@ export class TransactionService {
             });
 
             if (!account) {
-                await transaction.rollback();
                 throw new AppError('Account not found', 404);
             }
 
@@ -142,7 +167,6 @@ export class TransactionService {
             // Check transaction limits
             const limit = this.getTransactionLimit(accountData.user.tier, accountData.user.kycStatus);
             if (amount > limit) {
-                await transaction.rollback();
                 throw new AppError(
                     `Transaction limit exceeded for ${accountData.user.tier} (${accountData.user.kycStatus}). Limit: ${limit}`,
                     400
@@ -151,7 +175,6 @@ export class TransactionService {
 
             // Check sufficient funds
             if (parseFloat(account.balance.toString()) < amount) {
-                await transaction.rollback();
                 throw new AppError('Insufficient funds', 400);
             }
 
@@ -164,10 +187,113 @@ export class TransactionService {
                 description: description || null,
                 fromAccountId,
                 performedByUserId,
+                idempotencyKey: idempotencyKey || null,
             }, { transaction });
 
             await transaction.commit();
             return transRecord.toJSON();
+        } catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
+    }
+
+    static async createChargeback(
+        originalTransactionId: string,
+        reason: string,
+        performedByUserId: string
+    ) {
+        const transaction = await Transaction.sequelize!.transaction();
+
+        try {
+            // 1. Find the original transaction
+            const originalTx = await Transaction.findByPk(originalTransactionId, { transaction });
+            if (!originalTx) {
+                throw new AppError('Original transaction not found', 404);
+            }
+
+            // 2. Validate it can be reversed
+            if (originalTx.type === 'chargeback') {
+                throw new AppError('Cannot chargeback a chargeback', 400);
+            }
+
+            // Check if already charged back
+            const existingChargeback = await Transaction.findOne({
+                where: { referenceTransactionId: originalTransactionId, type: 'chargeback' },
+                transaction
+            });
+
+            if (existingChargeback) {
+                throw new AppError('Transaction already charged back', 400);
+            }
+
+            // 3. Reverse the money (Double Entry)
+            // Logic depends on the type of original transaction
+            if (originalTx.type === 'transfer') {
+                // Reverse transfer: Add back to sender, remove from receiver
+                if (!originalTx.fromAccountId || !originalTx.toAccountId) {
+                    throw new AppError('Invalid transfer record data', 500);
+                }
+
+                const fromAccount = await Account.findByPk(originalTx.fromAccountId, { transaction });
+                const toAccount = await Account.findByPk(originalTx.toAccountId, { transaction });
+
+                if (!fromAccount || !toAccount) {
+                    throw new AppError('One or both accounts associated with original transaction not found', 404);
+                }
+
+                // Check if receiver has enough funds to rollback? 
+                // Typically chargebacks force negative balance if necessary, but here let's enforce funds
+                if (parseFloat(toAccount.balance.toString()) < originalTx.amount) {
+                    throw new AppError('Receiver has insufficient funds for chargeback', 400);
+                }
+
+                await fromAccount.increment('balance', { by: originalTx.amount, transaction });
+                await toAccount.decrement('balance', { by: originalTx.amount, transaction });
+
+            } else if (originalTx.type === 'deposit') {
+                // Reverse deposit: Remove from receiver
+                if (!originalTx.toAccountId) {
+                    throw new AppError('Invalid deposit record data', 500);
+                }
+                const toAccount = await Account.findByPk(originalTx.toAccountId, { transaction });
+                if (!toAccount) {
+                    throw new AppError('Account not found', 404);
+                }
+
+                if (parseFloat(toAccount.balance.toString()) < originalTx.amount) {
+                    throw new AppError('Account has insufficient funds for chargeback', 400);
+                }
+
+                await toAccount.decrement('balance', { by: originalTx.amount, transaction });
+
+            } else if (originalTx.type === 'withdrawal') {
+                // Reverse withdrawal: Add back to sender
+                if (!originalTx.fromAccountId) {
+                    throw new AppError('Invalid withdrawal record data', 500);
+                }
+                const fromAccount = await Account.findByPk(originalTx.fromAccountId, { transaction });
+                if (!fromAccount) {
+                    throw new AppError('Account not found', 404);
+                }
+                await fromAccount.increment('balance', { by: originalTx.amount, transaction });
+            }
+
+            // 4. Create Chargeback Transaction Record
+            const chargebackTx = await Transaction.create({
+                amount: originalTx.amount,
+                type: 'chargeback',
+                status: 'completed',
+                description: `Chargeback for ${originalTx.id}: ${reason}`,
+                fromAccountId: originalTx.toAccountId ?? null, // Explicitly handle undefined/null
+                toAccountId: originalTx.fromAccountId ?? null,
+                performedByUserId,
+                referenceTransactionId: originalTx.id,
+            }, { transaction });
+
+            await transaction.commit();
+            return chargebackTx.toJSON();
+
         } catch (error) {
             await transaction.rollback();
             throw error;
