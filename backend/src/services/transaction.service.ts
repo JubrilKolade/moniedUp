@@ -1,6 +1,7 @@
 import { Transaction, Account, User } from '../models/index.js';
 import { AppError } from '../middleware/error.middleware.js';
 import { Op } from 'sequelize';
+import { NotificationService } from './notification.service.js';
 
 export class TransactionService {
     static getTransactionLimit(tier: string, kycStatus: string): number {
@@ -27,6 +28,23 @@ export class TransactionService {
             }
         }
 
+        // Resolve username if needed (Social Transfer)
+        let resolvedToAccountId = toAccountId;
+        if (toAccountId.startsWith('@')) {
+            const username = toAccountId.substring(1);
+            const recipientAccount = await Account.findOne({
+                include: [{
+                    model: User,
+                    as: 'user',
+                    where: { username }
+                }]
+            });
+            if (!recipientAccount) {
+                throw new AppError(`User with username ${toAccountId} not found`, 404);
+            }
+            resolvedToAccountId = recipientAccount.id;
+        }
+
         // Use Sequelize transaction (similar to MongoDB sessions)
         const transaction = await Transaction.sequelize!.transaction();
 
@@ -41,7 +59,7 @@ export class TransactionService {
                 transaction,
             });
 
-            const toAccount = await Account.findByPk(toAccountId, { transaction });
+            const toAccount = await Account.findByPk(resolvedToAccountId, { transaction });
 
             if (!fromAccount || !toAccount) {
                 throw new AppError('One or both accounts not found', 404);
@@ -74,12 +92,19 @@ export class TransactionService {
                 status: 'completed',
                 description: description || null,
                 fromAccountId,
-                toAccountId,
+                toAccountId: resolvedToAccountId,
                 performedByUserId,
                 idempotencyKey: idempotencyKey || null,
             }, { transaction });
 
             await transaction.commit();
+
+            // Notify asynchronously
+            NotificationService.notifyTransaction(performedByUserId, amount, 'transfer', 'completed', description);
+            Account.findByPk(resolvedToAccountId).then(acc => {
+                if (acc) NotificationService.notifyTransaction(acc.userId, amount, 'credit transfer', 'completed', description);
+            });
+
             return transRecord.toJSON();
         } catch (error) {
             await transaction.rollback();
