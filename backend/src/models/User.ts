@@ -8,11 +8,14 @@ export interface UserAttributes {
     id: string;
     name: string;
     email: string;
+    username: string;
     password: string;
     phone: string;
     address: string;
     tier: string;
     kycStatus: string;
+    kycDocumentUrl?: string | null;
+    kycSubmittedAt?: Date | null;
     twoFactorSecret?: string | null;
     createdAt?: Date;
     updatedAt?: Date;
@@ -26,11 +29,14 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
     declare public id: string;
     declare public name: string;
     declare public email: string;
+    declare public username: string;
     declare public password: string;
     declare public phone: string;
     declare public address: string;
     declare public tier: string;
     declare public kycStatus: string;
+    declare public kycDocumentUrl: string | null;
+    declare public kycSubmittedAt: Date | null;
     declare public twoFactorSecret: string | null;
 
     // Timestamps
@@ -70,6 +76,11 @@ User.init(
                 isEmail: true,
             },
         },
+        username: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            unique: true,
+        },
         password: {
             type: DataTypes.STRING,
             allowNull: false,
@@ -91,6 +102,14 @@ User.init(
             type: DataTypes.STRING,
             defaultValue: 'unverified',
             allowNull: false,
+        },
+        kycDocumentUrl: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        kycSubmittedAt: {
+            type: DataTypes.DATE,
+            allowNull: true,
         },
         twoFactorSecret: {
             type: DataTypes.STRING,
