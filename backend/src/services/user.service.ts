@@ -8,6 +8,7 @@ export class UserService {
         password: string;
         phone: string;
         address: string;
+        username?: string;
     }) {
         // Check if user exists (similar to User.findOne in Mongoose)
         const existingUser = await User.findOne({ where: { email: data.email } });
@@ -15,10 +16,17 @@ export class UserService {
             throw new AppError('User already exists', 409);
         }
 
+        let generatedUsername = data.username;
+        if (!generatedUsername) {
+            const emailPrefix = data.email ? data.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') : 'user';
+            generatedUsername = `${emailPrefix}${Math.floor(Math.random() * 1000)}`;
+        }
+
         // Create user (similar to new User().save() in Mongoose)
         const user = await User.create({
             name: data.name,
             email: data.email,
+            username: generatedUsername,
             password: data.password,
             phone: data.phone,
             address: data.address,
