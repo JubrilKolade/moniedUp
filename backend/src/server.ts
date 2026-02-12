@@ -9,6 +9,8 @@ import transactionRoutes from './routes/transaction.route.js';
 import twoFactorRoutes from './routes/twoFactor.route.js';
 import adminRoutes from './routes/admin.route.js';
 import cardRoutes from './routes/card.route.js';
+import kycRoutes from './routes/kyc.route.js';
+import splitRoutes from './routes/split.route.js';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware.js';
 
 
@@ -31,7 +33,7 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    
+
     if (req.method === 'OPTIONS') {
         res.sendStatus(200);
         return;
@@ -46,6 +48,8 @@ app.use('/api/v1/transactions', transactionRoutes);
 app.use('/api/v1/two-factor', twoFactorRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/cards', cardRoutes);
+app.use('/api/v1/kyc', kycRoutes);
+app.use('/api/v1/split', splitRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
