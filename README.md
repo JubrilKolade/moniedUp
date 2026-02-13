@@ -1,198 +1,125 @@
-# MoniedUp (Backend)
+# 🏦 MoniedUp
 
-A simple fintech backend built with TypeScript, Express and Sequelize (PostgreSQL).
-
-**Features**
-
-- User registration, login (JWT), profile management ✅
-- Account creation and balance retrieval ✅
-- Transactions: transfers, deposits, withdrawals (with limits & checks) ✅
-- Two-factor authentication (TOTP) with QR code generation ✅
-- Card issuance and management ✅
-- Admin endpoints to manage users ✅
-- Validation with Zod and centralized error handling ✅
+A premium, modern fintech backend built with **TypeScript**, **Express**, and **Sequelize**. MoniedUp provides a robust foundation for building banking applications with a focus on security, compliance, and social features.
 
 ---
 
-## 🔧 Tech stack
+## ✨ Key Features
 
-- Node.js + TypeScript
-- Express
-- Sequelize ORM (Postgres)
-- JWT (jsonwebtoken)
-- Zod (request validation)
-- bcryptjs, speakeasy, qrcode
+### 👤 User Management & Compliance
+- **Secure Authentication**: JWT-based login, registration, and profile management.
+- **2FA Security**: Integrated Two-Factor Authentication (TOTP) with QR code generation for enhanced account security.
+- **KYC Workflow**: Automated identity verification process with multi-tier limits (Tier 1 → Tier 2 upon verification).
+- **Unique Usernames**: Human-readable handles (e.g., `@alex`) for social interactions.
 
----
+### 💰 Core Banking
+- **Account Management**: Multiple account support with real-time balance tracking.
+- **Transactions**: Secure deposits, withdrawals, and peer-to-peer transfers.
+- **Limit Enforcement**: Dynamic transaction limits based on user tier and verification status.
+- **Idempotency**: Safe transaction handling to prevent duplicate processing.
 
-## 🚀 Getting started
+### 💳 Card Services
+- **Virtual Cards**: Instant card issuance and lifecycle management linked to specific accounts.
 
-1. Clone the repo and install dependencies
-
-```bash
-cd backend
-npm install
-```
-
-2. Create a `.env` file in `backend/` (see **Environment** below)
-
-3. Run in development
-
-```bash
-npm run dev
-```
-
-4. Build and run production
-
-```bash
-npm run build
-npm start
-```
-
-> The server defaults to port `3000` (override with `PORT`). Health check: `GET /health`.
+### 🤝 Social & Notifications
+- **Social Transfers**: Send money using `@usernames` instead of complex account IDs.
+- **Bill Splitting**: Group split functionality to share expenses effortlessly.
+- **Notification System**: Real-time alerts for transactions (deposits, credits, transfers) and system updates (KYC status).
 
 ---
 
-## 🔐 Environment variables
+## 🔧 Tech Stack
 
-Create `backend/.env` with the following (example):
-
-```env
-DATABASE_URL="postgresql://username:password@localhost:5432/database_name?schema=public"
-JWT_SECRET=your-secret-key-here-change-this-in-production
-PORT=3000
-CORS_ORIGIN=http://localhost:3000
-NODE_ENV=development
-```
-
-Notes:
-- `DATABASE_URL` must be a valid PostgreSQL connection string.
-- `JWT_SECRET` is required — server will exit if missing.
+- **Runtime**: [Node.js](https://nodejs.org/)
+- **Language**: [TypeScript](https://www.typescriptlang.org/)
+- **Framework**: [Express](https://expressjs.com/)
+- **Database Architecture**: [Sequelize ORM](https://sequelize.org/) with PostgreSQL
+- **Validation**: [Zod](https://zod.dev/) for type-safe request schemas
+- **Security**: [bcryptjs](https://github.com/dcodeIO/bcrypt.js), [speakeasy](https://github.com/speakeasyjs/speakeasy)
+- **Utilities**: [qrcode](https://github.com/soldair/node-qrcode), [jsonwebtoken](https://github.com/auth0/node-jsonwebtoken)
 
 ---
 
-## 🗂 Project structure (relevant)
+## 🚀 Getting Started
 
-- `server.ts` — app entry, route mounting and DB connect
-- `config/db.ts` — Sequelize connection
-- `models/` — Sequelize models and relationships
-- `controllers/` — request handlers
-- `services/` — business logic (DB operations)
-- `routes/` — API routes
-- `middleware/` — auth, validations, error handlers
-- `validators/` — Zod schemas for request validation
+### Prerequisites
+- Node.js (v18+)
+- PostgreSQL instance
 
----
+### Installation
 
-## 📡 API (main endpoints)
+1. **Clone and install dependencies**
+   ```bash
+   cd backend
+   npm install
+   ```
 
-All endpoints are prefixed with `/api/v1`.
+2. **Configure Environment**
+   Create a `.env` file in the `backend/` directory:
+   ```env
+   DATABASE_URL="postgresql://user:pass@localhost:5432/moniedup"
+   JWT_SECRET="your_secure_secret"
+   PORT=3000
+   CORS_ORIGIN=http://localhost:3000
+   NODE_ENV=development
+   ```
 
-- Users
-  - POST `/api/v1/users/register` — register (body: name, email, password, phone, address)
-  - POST `/api/v1/users/login` — login (body: email, password) → returns `{ token }`
-  - POST `/api/v1/users/logout` — logout (auth)
-  - GET `/api/v1/users/profile` — get authenticated user's profile (auth)
-  - PUT `/api/v1/users/:userId` — update user (auth + ownership)
-  - DELETE `/api/v1/users/:userId` — delete user (auth + ownership)
+3. **Initialize Database**
+   ```bash
+   npm run build
+   # Optional: run seeds/migrations if using them
+   ```
 
-- Accounts
-  - POST `/api/v1/accounts` — create account (auth)
-  - GET `/api/v1/accounts/:userId/balance` — get balance (auth + ownership)
-
-- Transactions
-  - POST `/api/v1/transactions` — create transaction (transfer, deposit, withdrawal)
-    - body for transfer: `{ type: 'transfer', fromAccountId, toAccountId, amount, description? }`
-    - deposit: `{ type: 'deposit', toAccountId, amount }`
-    - withdrawal: `{ type: 'withdrawal', fromAccountId, amount }`
-  - GET `/api/v1/transactions/:accountId/history` — transaction history (auth + access control)
-
-- Two-factor (2FA)
-  - POST `/api/v1/two-factor/generate` — generate TOTP secret & QR (auth)
-  - POST `/api/v1/two-factor/validate` — validate 2FA token (auth)
-
-- Cards
-  - POST `/api/v1/cards/apply` — apply for card (auth + account access)
-  - GET `/api/v1/cards/:accountId` — list cards for account (auth + account access)
-  - DELETE `/api/v1/cards/:cardId` — delete card (auth)
-
-- Admin
-  - GET `/api/v1/admin/users` — list all users (auth + admin role)
+4. **Launch Server**
+   ```bash
+   npm run dev
+   ```
+   > The API will be accessible at `http://localhost:3000/api/v1`. Health check: `GET /health`.
 
 ---
 
-## 🔑 Authentication & authorization
+## 🛰 API Reference
 
-- JWT-based authentication. Include header: `Authorization: Bearer <token>`.
-- `authenticateToken` middleware validates token and attaches `userId` (and optional `userRole`) to the request.
-- `authorizeUser` enforces ownership or admin rights where needed.
+### 🛡 KYC & Compliance
+- `POST /api/v1/kyc/submit` — Submit identity documents for review.
+- `PATCH /api/v1/kyc/admin/review/:userId` — [Admin] Approve or reject KYC submissions.
 
----
+### 👯 Social & Splitting
+- `POST /api/v1/split/bill` — Split a total amount among multiple users.
+- *Transfers*: Both `toAccountId` and `@username` are supported in the transfer endpoint.
 
-## ✅ Validation & Error handling
+### 🔐 Authentication
+- `POST /api/v1/users/register` — Create a new account.
+- `POST /api/v1/users/login` — Authenticate and receive JWT.
+- `POST /api/v1/two-factor/generate` — Setup 2FA.
 
-- Requests are validated using Zod schemas in `validators/` and `middleware/validation.middleware.ts`.
-- Centralized error handling via `middleware/error.middleware.ts` and `AppError` for predictable responses.
-
----
-
-## ⚠️ Database
-
-- The app uses Sequelize. On non-production starts, it runs `sequelize.sync()` to create tables automatically. For production, use real migrations.
-- See `config/db.ts` and `SEQUELIZE_GUIDE.md` for notes and migration guidance.
-
----
-
-## 📋 Example curl requests
-
-Register & Login
-
-```bash
-curl -X POST http://localhost:3000/api/v1/users/register \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Alice","email":"alice@example.com","password":"pass123","phone":"1234567890","address":"123 Main St"}'
-
-curl -X POST http://localhost:3000/api/v1/users/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@example.com","password":"pass123"}'
-# Response contains a JWT token to use in Authorization header
-```
-
-Create account (authenticated)
-
-```bash
-curl -X POST http://localhost:3000/api/v1/accounts \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  -d '{"type":"savings"}'
-```
-
-Transfer (authenticated)
-
-```bash
-curl -X POST http://localhost:3000/api/v1/transactions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  -d '{"type":"transfer","fromAccountId":"<from>","toAccountId":"<to>","amount":100.5}'
-```
+### 💳 Transactions
+- `POST /api/v1/transactions` — Perform deposits, withdrawals, or transfers.
+- `GET /api/v1/transactions/:accountId/history` — Paginated transaction history.
 
 ---
 
-## 🧪 Tests
+## 🗂 Project Structure
 
-There are no tests included at present. Contributions adding tests are welcome.
+- `src/services/` — Core business logic and database interactions.
+- `src/routes/` — API endpoint definitions.
+- `src/models/` — Database schemas and relationships.
+- `src/middleware/` — Auth, error handling, and request validation.
+- `src/controllers/` — Request/Response handling.
+
+---
+
+## 🧪 Future Roadmap
+- [ ] Integration with real-world payment providers (Stripe/Paystack).
+- [ ] Multi-currency support and real-time exchange rates.
+- [ ] Advanced fraud detection algorithms.
+- [ ] Full integration testing suite (Jest/Supertest).
 
 ---
 
-## 🤝 Contributing
-
-PRs welcome. Please open issues for bugs or feature requests. Maintain coding conventions (TypeScript, ESLint if present) and add tests when possible.
-
----
+## 🤝 Community
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
-
-This project does not include an explicit license file. Add a `LICENSE` if you wish to set one.
-
----
+ISC
 
